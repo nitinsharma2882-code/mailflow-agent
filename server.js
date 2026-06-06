@@ -79,6 +79,7 @@ app.post('/auth-gmail', auth, async function(req, res) {
       console.log('[Gmail Auth] Page title:', await page.title())
       console.log('[Gmail Auth] Current URL after goto:', page.url())
       console.log('[Gmail Auth] Page content length:', (await page.content()).length)
+      notifyLicenseServer(accountId, 'authenticating', 'Page loaded — looking for login form...').catch(() => {})
 
       // Step 2 - Enter email with multiple selector fallbacks
       const emailSelectors = [
@@ -96,6 +97,7 @@ app.post('/auth-gmail', auth, async function(req, res) {
         } catch(e) {}
       }
       if (!emailInput) throw new Error('Could not find email input field')
+      notifyLicenseServer(accountId, 'authenticating', 'Entering email address...').catch(() => {})
       await emailInput.click()
       await emailInput.type(email, { delay: 100 })
       await page.waitForTimeout(1000)
@@ -108,6 +110,7 @@ app.post('/auth-gmail', auth, async function(req, res) {
           if (btn) { await btn.click(); break }
         } catch(e) {}
       }
+      notifyLicenseServer(accountId, 'authenticating', 'Email submitted — waiting for password field...').catch(() => {})
       await page.waitForTimeout(3000)
 
       // Step 3 - Enter password with multiple selector fallbacks
@@ -125,6 +128,7 @@ app.post('/auth-gmail', auth, async function(req, res) {
         } catch(e) {}
       }
       if (!passInput) throw new Error('Could not find password input field')
+      notifyLicenseServer(accountId, 'authenticating', 'Entering password...').catch(() => {})
       await passInput.click()
       await passInput.type(password, { delay: 100 })
       await page.waitForTimeout(1000)
@@ -137,6 +141,7 @@ app.post('/auth-gmail', auth, async function(req, res) {
           if (btn) { await btn.click(); break }
         } catch(e) {}
       }
+      notifyLicenseServer(accountId, 'authenticating', 'Credentials submitted — checking for verification...').catch(() => {})
       await page.waitForTimeout(5000)
 
       // Step 4 - Check for phone/challenge verification
@@ -157,6 +162,7 @@ app.post('/auth-gmail', auth, async function(req, res) {
       }
 
       // Check if on consent screen
+      notifyLicenseServer(accountId, 'authenticating', 'Looking for OAuth2 consent screen...').catch(() => {})
       if (currentUrl.includes('accounts.google.com/o/oauth2')) {
         // Click Allow button
         try {
@@ -165,6 +171,7 @@ app.post('/auth-gmail', auth, async function(req, res) {
           for (const btn of buttons) {
             const text = await btn.evaluate(el => el.textContent)
             if (text.includes('Allow') || text.includes('Continue')) {
+              notifyLicenseServer(accountId, 'authenticating', 'Clicking Allow on consent screen...').catch(() => {})
               await btn.click()
               await page.waitForTimeout(2000)
               break
@@ -176,6 +183,7 @@ app.post('/auth-gmail', auth, async function(req, res) {
       }
 
       // Wait for redirect to localhost callback
+      notifyLicenseServer(accountId, 'authenticating', 'Waiting for OAuth2 callback redirect...').catch(() => {})
       await page.waitForFunction(
         () => window.location.href.includes('localhost:8765'),
         { timeout: 15000 }
@@ -193,6 +201,7 @@ app.post('/auth-gmail', auth, async function(req, res) {
       }
 
       console.log('[Gmail Auth] Got auth code, exchanging for tokens...')
+      notifyLicenseServer(accountId, 'authenticating', 'Auth code received — exchanging for tokens...').catch(() => {})
 
       // Exchange code for tokens
       const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
