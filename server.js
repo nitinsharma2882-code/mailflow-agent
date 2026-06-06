@@ -51,6 +51,14 @@ app.post('/auth-gmail', auth, async function(req, res) {
       // Set viewport
       await page.setViewport({ width: 1280, height: 800 })
 
+      // Set user agent to look like real Chrome browser
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36')
+
+      // Set extra headers
+      await page.setExtraHTTPHeaders({
+        'Accept-Language': 'en-US,en;q=0.9'
+      })
+
       // Build OAuth URL
       const scope = encodeURIComponent('https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email')
       const redirectUri = encodeURIComponent('http://localhost:8765/callback')
@@ -65,6 +73,12 @@ app.post('/auth-gmail', auth, async function(req, res) {
       console.log('[Gmail Auth] Opening OAuth URL for:', email)
       await page.goto(authUrl, { waitUntil: 'networkidle2', timeout: 60000 })
       await page.waitForTimeout(3000)
+
+      // Save screenshot to see what page loaded
+      await page.screenshot({ path: '/tmp/gmail-auth-debug.png' })
+      console.log('[Gmail Auth] Page title:', await page.title())
+      console.log('[Gmail Auth] Current URL after goto:', page.url())
+      console.log('[Gmail Auth] Page content length:', (await page.content()).length)
 
       // Step 2 - Enter email with multiple selector fallbacks
       const emailSelectors = [
