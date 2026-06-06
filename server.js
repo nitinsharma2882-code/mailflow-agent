@@ -31,7 +31,7 @@ app.post('/auth-gmail', auth, async function(req, res) {
 
       // Launch fresh browser with no cached data
       browser = await puppeteer.launch({
-        headless: true,
+        headless: 'new',
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -63,29 +63,79 @@ app.post('/auth-gmail', auth, async function(req, res) {
         '&prompt=consent'
 
       console.log('[Gmail Auth] Opening OAuth URL for:', email)
-      await page.goto(authUrl, { waitUntil: 'networkidle2', timeout: 30000 })
-
-      // Step 1: Enter email
-      await page.waitForSelector('input[type="email"]', { timeout: 10000 })
-      await page.type('input[type="email"]', email, { delay: 50 })
-      await page.keyboard.press('Enter')
-      await page.waitForTimeout(2000)
-
-      // Step 2: Enter password
-      await page.waitForSelector('input[type="password"]', { timeout: 10000 })
-      await page.type('input[type="password"]', password, { delay: 50 })
-      await page.keyboard.press('Enter')
+      await page.goto(authUrl, { waitUntil: 'networkidle2', timeout: 60000 })
       await page.waitForTimeout(3000)
 
-      // Check current URL
+      // Step 2 - Enter email with multiple selector fallbacks
+      const emailSelectors = [
+        'input[type="email"]',
+        'input[name="identifier"]',
+        'input[id="identifierId"]',
+        '#identifierId'
+      ]
+      let emailInput = null
+      for (const selector of emailSelectors) {
+        try {
+          await page.waitForSelector(selector, { timeout: 5000 })
+          emailInput = await page.$(selector)
+          if (emailInput) { console.log('[Gmail Auth] Found email input:', selector); break }
+        } catch(e) {}
+      }
+      if (!emailInput) throw new Error('Could not find email input field')
+      await emailInput.click()
+      await emailInput.type(email, { delay: 100 })
+      await page.waitForTimeout(1000)
+
+      // Click Next button
+      const nextSelectors = ['#identifierNext', 'button[type="button"]', '.VfPpkd-LgbsSe']
+      for (const sel of nextSelectors) {
+        try {
+          const btn = await page.$(sel)
+          if (btn) { await btn.click(); break }
+        } catch(e) {}
+      }
+      await page.waitForTimeout(3000)
+
+      // Step 3 - Enter password with multiple selector fallbacks
+      const passSelectors = [
+        'input[type="password"]',
+        'input[name="password"]',
+        'input[name="Passwd"]'
+      ]
+      let passInput = null
+      for (const selector of passSelectors) {
+        try {
+          await page.waitForSelector(selector, { timeout: 8000 })
+          passInput = await page.$(selector)
+          if (passInput) { console.log('[Gmail Auth] Found password input:', selector); break }
+        } catch(e) {}
+      }
+      if (!passInput) throw new Error('Could not find password input field')
+      await passInput.click()
+      await passInput.type(password, { delay: 100 })
+      await page.waitForTimeout(1000)
+
+      // Click Next/Sign in button
+      const signInSelectors = ['#passwordNext', 'button[type="button"]', '.VfPpkd-LgbsSe']
+      for (const sel of signInSelectors) {
+        try {
+          const btn = await page.$(sel)
+          if (btn) { await btn.click(); break }
+        } catch(e) {}
+      }
+      await page.waitForTimeout(5000)
+
+      // Step 4 - Check for phone/challenge verification
       const currentUrl = page.url()
       console.log('[Gmail Auth] After login URL:', currentUrl)
+      const pageContent = await page.content()
 
-      // Check if phone verification is asked
       if (currentUrl.includes('challenge') ||
-          currentUrl.includes('signin/v2/challenge') ||
-          currentUrl.includes('phone')) {
-        console.log('[Gmail Auth] Phone verification required for:', email)
+          currentUrl.includes('phone') ||
+          pageContent.includes('phone') ||
+          pageContent.includes('verify') ||
+          pageContent.includes('Verify')) {
+        console.log('[Gmail Auth] Phone/challenge verification required for:', email)
         await browser.close()
         browser = null
         await notifyLicenseServer(accountId, 'needs_phone', 'Phone verification required')
